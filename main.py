@@ -56,7 +56,7 @@ async def classify_message(message: str):
                     "messages": [
                         {
                             "role": "system",
-                            "content": "Your job is to classify user requests into 1 of 4 categories. respond only with json.\n1 User is trying to start a new creation.\n2 User is trying to modify something they created\n3 User is asking a question about what they are creating or for advice\n4 User's request doesn't fit into any of the above\n{classification: X where X is the number of the category this request belongs to.}"
+                            "content": "Your job is to classify user requests into 1 of 4 categories. Note that the user is using this interface to create cells for a project. respond only with json.\n1 User is trying to start a new creation.\n2 User is trying to modify something they created\n3 User is asking a question about what they are creating or for advice\n4 User's request doesn't fit into any of the above\n{classification: X where X is the number of the category this request belongs to.}"
                         },
                         {
                             "role": "user",
@@ -176,6 +176,45 @@ async def chat(chat_message: ChatMessage):
             conversation_history.append({"role": "assistant", "content": response})
             return {"response": response, "cells": None}
         
+        if classification_json["classification"] == 3:
+            # Advice mode
+            system_message = {
+                "role": "system",
+                "content": "Your job is to give advice based on the conversation here. Respond as a kind tutor, knowledgeable in all topics in plain text. Do not try to fix things, only guide in the right direction with small examples."
+            }
+            
+            messages = [system_message] + conversation_history + [{"role": "user", "content": chat_message.message}]
+            
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {OPENAI_API_KEY}"
+                    },
+                    json={
+                        "model": "gpt-4-0125-preview",
+                        "messages": messages,
+                        "temperature": 0.7,
+                        "max_tokens": 1000,
+                        "top_p": 1,
+                        "frequency_penalty": 0,
+                        "presence_penalty": 0
+                    }
+                )
+            
+            response.raise_for_status()
+            advice = response.json()["choices"][0]["message"]["content"]
+            
+            conversation_history.append({"role": "user", "content": chat_message.message})
+            conversation_history.append({"role": "assistant", "content": advice})
+            
+            return {
+                "response": advice,
+                "cells": None,
+                "action": "answer"
+            }
+        
         cells_json = await generate_cells(chat_message.message, conversation_history)
         cells = json.loads(cells_json)
         
@@ -195,9 +234,6 @@ async def chat(chat_message: ChatMessage):
         elif classification_json["classification"] == 2:
             response = "Cells have been changed."
             action = "modify"
-        else:  # classification 3
-            response = cells_json
-            action = "answer"
         
         conversation_history.append({"role": "user", "content": chat_message.message})
         conversation_history.append({"role": "assistant", "content": cells_json})
