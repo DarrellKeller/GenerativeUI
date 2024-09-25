@@ -180,7 +180,7 @@ async def chat(chat_message: ChatMessage):
             # Advice mode
             system_message = {
                 "role": "system",
-                "content": "Your job is to give advice based on the conversation here. Respond as a kind tutor, knowledgeable in all topics in plain text. Do not try to fix things, only guide in the right direction with small examples."
+                "content": "Your job is to give advice based on the conversation here. Respond as a kind tutor, knowledgeable in all topics in plain text. Do not try to fix things, only guide in the right direction with small examples. Respond with only 2 paragraphs. max."
             }
             
             messages = [system_message] + conversation_history + [{"role": "user", "content": chat_message.message}]
